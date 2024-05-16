@@ -1,33 +1,38 @@
-#!/bin/bash
-
 process_files() {
     local file1=$1
     local file2=$2
-    local file3=$3
 
-    # Use awk to join the files based on the key
+    # Extract headers from both files
+    local header1=$(head -n 1 "$file1")
+    local header2=$(head -n 1 "$file2")
+
+    # Join headers (excluding the first three columns from the second header)
+    local joined_header=$(echo -e "$header1\t$(echo "$header2" | cut -f4-)")
+
+    # Print joined header
+    echo -e "$joined_header"
+
+    # Use awk to join the files based on the first three columns (Entity, Code, Year)
     awk '
-    BEGIN { OFS="\t" }
-
-    FNR==NR {
-        a[$1] = $NF
+    BEGIN { FS = OFS = "\t" }
+    FNR > 1 && NR == FNR {
+        key = $1 OFS $2 OFS $3
+        a[key] = $4 OFS $5 OFS $6
         next
     }
-
-    FNR==FNR {
-        b[$1] = $NF
-        next
+    FNR > 1 {
+        key = $1 OFS $2 OFS $3
+        if (key in a) {
+            print $0, a[key]
+        }
     }
-
-    {
-        print $0, ($3 in a ? a[$3] : "NA"), ($3 in b ? b[$3] : "NA")
-    }' "$file2" "$file1" "$file3"
+    ' "$file2" "$file1"
 }
+
 # Main logic to handle two files
-if [ "$#" -ne 3 ]; then
+if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <file1> <file2>"
     exit 1
 fi
 
-# Call process_files with both files
-process_files "$1" "$2" "$3"
+process_files "$1" "$2"
