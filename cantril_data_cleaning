@@ -1,0 +1,33 @@
+#!/bin/bash
+
+process_files() {
+    local file1=$1
+    local file2=$2
+    local file3=$3
+
+    # Use awk to join the files based on the key
+    awk '
+    BEGIN { OFS="\t" }
+
+    FNR==NR {
+        a[$1] = $NF
+        next
+    }
+
+    FNR==FNR {
+        b[$1] = $NF
+        next
+    }
+
+    {
+        print $0, ($3 in a ? a[$3] : "NA"), ($3 in b ? b[$3] : "NA")
+    }' "$file2" "$file1" "$file3"
+}
+# Main logic to handle two files
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <file1> <file2>"
+    exit 1
+fi
+
+# Call process_files with both files
+process_files "$1" "$2" "$3"
