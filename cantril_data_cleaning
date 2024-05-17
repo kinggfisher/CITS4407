@@ -1,35 +1,115 @@
-process_files() {
-    local file1=$1
-    local file2=$2
-    local file3=$3
+#!/bin/bash
 
-    # Use awk to join the files based on the first three columns (Entity, Code, Year)
-    awk '
-    BEGIN { FS = OFS = "\t" }
-    NR == FNR {  # Processing the first file
-        key = $1 OFS $2 OFS $3
-        a[key] = $0
-        next
-    }
-    FNR != NR && ARGIND == 2 {  # Processing the second file
-        key = $1 OFS $2 OFS $3
-        b[key] = $4
-        next
-    }
-    ARGIND == 3 {  # Processing the third file
-        key = $1 OFS $2 OFS $3
-        c[key] = $4
-        if (key in a) {
-            print a[key], (key in b ? b[key] : ""), (key in c ? c[key] : "")
-        }
-    }
-    ' "$file1" "$file2" "$file3"
-}
-
-# Main logic to handle three files
+# Check if three arguments are provided
 if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 <file1> <file2> <file3>"
+    echo "Usage: $0 file1.tsv file2.tsv file3.tsv"
     exit 1
 fi
 
-process_files "$1" "$2" "$3"
+# Input files
+file1="$1"
+file2="$2"
+file3="$3"
+
+# Temporary files to store intermediate results
+temp_file1="temp1.tsv"
+temp_file2="temp2.tsv"
+temp_file3="temp3.tsv"
+
+# Function to remove the "Continent" column and save the result to a temporary file
+remove_continent_column() {
+    local file="$1"
+    local output="$2"
+    awk -F'\t' '
+        NR == 1 {
+            for (i = 1; i <= NF; i++) {
+                if ($i == "Continent") { continent_col = i; break; }
+            }
+            print
+        }
+        NR > 1 {
+            if (continent_col) {
+                $continent_col = ""
+                $0 = gensub(/\t+/, "\t", "g", $0)
+                sub(/\t$/, "", $0)
+            }
+            print
+        }
+    ' OFS='\t' "$file" > "$output"
+}
+
+# Remove the "Continent" column from each file
+remove_continent_column "$file1" "$temp_file1"
+remove_continent_column "$file2" "$temp_file2"
+remove_continent_column "$file3" "$temp_file3"
+
+# Define the desired order of columns
+headers=("Entity" "Code" "Year" "GDP per capita, PPP (constant 2017 international $)" "Population (historical estimates)" "Homicide rate per 100,000 population - Both sexes - All ages" "Life expectancy - Sex: all - Age: at birth - Variant: estimates" "Cantril ladder score")
+
+# Print the desired header to the final output file
+header_line=$(IFS=$'\t'; echo "${headers[*]}")
+echo -e "$header_line" > merged_output.tsv
+
+# Function to process each row and place data under relevant headers
+process_row() {
+    local line="$1"
+    local -n output_row="$2"
+    local -A header_index
+
+    # Create a mapping from header to index
+    for i in "${!headers[@]}"; do
+        header_index["${headers[$i]}"]=$i
+    done
+
+    # Split the line into fields
+    IFS=$'\t' read -r -a fields <<< "$line"
+
+    # Initialize the output row with empty fields
+    output_row=()
+    for (( i=0; i<${#headers[@]}; i++ )); do
+        output_row+=("")
+    done
+
+    # Assign fields to the correct header index
+    for (( i=0; i<${#fields[@]}; i++ )); do
+        if [ "$i" -lt 3 ]; then
+            # Entity, Code, and Year are always in the first three positions
+            output_row[$i]="${fields[$i]}"
+        else
+            # Assign the rest of the fields based on the headers
+            output_row[${header_index["${headers[$i]}"]}]="${fields[$i]}"
+        fi
+    done
+}
+
+# Function to merge files based on the first three columns and consolidate data
+merge_and_consolidate() {
+    local temp_file="$1"
+    awk -F'\t' -v OFS='\t' '
+        NR > 1 {
+            key = $1 OFS $2 OFS $3
+            if (!(key in keys)) {
+                keys[key] = key
+            }
+            data[key] = (data[key] ? data[key] FS : "") $0
+        }
+        END {
+            for (key in keys) {
+                print data[key]
+            }
+        }
+    ' "$temp_file" | while IFS=$'\t' read -r line; do
+        process_row "$line" row
+        echo -e "$(IFS=$'\t'; echo "${row[*]}")"
+    done >> merged_output.tsv
+}
+
+# Merge and consolidate each file
+merge_and_consolidate "$temp_file1"
+merge_and_consolidate "$temp_file2"
+merge_and_consolidate "$temp_file3"
+
+# Clean up the temporary files
+rm "$temp_file1" "$temp_file2" "$temp_file3"
+
+echo "Merging complete. Output saved to merged_output.tsv"
