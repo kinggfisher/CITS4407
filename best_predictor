@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# Check for one argument
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 input_file.tsv" >&2
+    exit 1
+fi
+
+input_file="$1"
+
+cleaned_data=$(awk -F"\t" '
+{
+    if ($8 > 0) {
+        population_xy[$1] += $5 * $8;
+        population_sumx[$1] += $5;
+        population_sumx2[$1] += $5 * $5;
+
+        homicide_xy[$1] += $6 * $8;
+        homicide_sumx[$1] += $6;
+        homicide_sumx2[$1] += $6 * $6;
+
+        sum_cantril2[$1] += $8 * $8;
+        sum_cantril[$1] += $8;
+
+        life_expec[$1] += $7 * $8;
+        life_expec_sumx[$1] += $7;
+        life_expec_sumx2[$1] += $7 * $7;
+
+        gdp_product[$1] += $4 * $8;
+        gdp_sumx[$1] += $4;
+        gdp_sumx2[$1] += $4 * $4;
+
+        count[$1]++;
+    }
+}
+END {
+    for (i in count) {
+        if (count[i] > 3) {
+            homicide_corr[i] = calc_corr(count[i], homicide_xy[i], homicide_sumx[i], homicide_sumx2[i], sum_cantril[i], sum_cantril2[i]);
+            life_expec_corr[i] = calc_corr(count[i], life_expec[i], life_expec_sumx[i], life_expec_sumx2[i], sum_cantril[i], sum_cantril2[i]);
+            gdp_corr[i] = calc_corr(count[i], gdp_product[i], gdp_sumx[i], gdp_sumx2[i], sum_cantril[i], sum_cantril2[i]);
+            population_corr[i] = calc_corr(count[i], population_xy[i], population_sumx[i], population_sumx2[i], sum_cantril[i], sum_cantril2[i]);
+
+            homicide_corr_average += homicide_corr[i];
+            life_expec_corr_average += life_expec_corr[i];
+            gdp_corr_average += gdp_corr[i];
+            population_corr_average += population_corr[i];
+            count_average++;
+        }
+    }
+
+    homicide_corr_average /= count_average;
+    life_expec_corr_average /= count_average;
+    gdp_corr_average /= count_average;
+    population_corr_average /= count_average;
+
+    max_corr = homicide_corr_average;
+    max_name = "Homicide Rate";
+
+    if (abs(life_expec_corr_average) > abs(max_corr)) {
+        max_corr = life_expec_corr_average;
+        max_name = "Life Expectancy";
+    }
+    if (abs(gdp_corr_average) > abs(max_corr)) {
+        max_corr = gdp_corr_average;
+        max_name = "GDP";
+    }
+    if (abs(population_corr_average) > abs(max_corr)) {
+        max_corr = population_corr_average;
+        max_name = "Population";
+    }
+
+    printf "Mean correlation of Homicide Rate with Cantril ladder is %.3f\n", homicide_corr_average;
+    printf "Mean correlation of GDP with Cantril ladder is %.3f\n", gdp_corr_average;
+    printf "Mean correlation of Population with Cantril ladder is %.3f\n", population_corr_average;
+    printf "Mean correlation of Life Expectancy with Cantril ladder is %.3f\n", life_expec_corr_average;
+    printf "Most predictive mean correlation with the Cantril ladder is %s (r = %.3f)\n", max_name, max_corr;
+}
+function calc_corr(n, xy, sumx, sumx2, sumy, sumy2) {
+    denom = sqrt((n * sumx2 - sumx * sumx) * (n * sumy2 - sumy * sumy));
+    return denom ? (n * xy - sumx * sumy) / denom : 0;
+}
+function abs(x) {
+    return x < 0 ? -x : x;
+}
+' "$input_file")
+
+echo "$cleaned_data"
