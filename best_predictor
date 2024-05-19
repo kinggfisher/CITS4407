@@ -8,6 +8,7 @@ fi
 
 input_file="$1"
 
+#calc correlation between Cantril ladder and homicide rate, GDP, population, and life expectancy
 cleaned_data=$(awk -F"\t" '
 {
     if ($8 > 0) {
@@ -56,7 +57,7 @@ END {
 
     max_corr = homicide_corr_average;
     max_name = "Homicide Rate";
-
+    
     if (abs(life_expec_corr_average) > abs(max_corr)) {
         max_corr = life_expec_corr_average;
         max_name = "Life Expectancy";
@@ -85,4 +86,5 @@ function abs(x) {
 }
 ' "$input_file")
 
+# Print the result
 echo "$cleaned_data"
