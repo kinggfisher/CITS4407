@@ -1,3 +1,11 @@
+# Author: Dhanush Gowda, SID: 24245807
+
+# This script is used to clean and merge three tab-separated value (TSV) files. 
+# It checks if the correct number of arguments are provided and validates if the files are in TSV format with the same number of fields in each row.
+# The script then merges the files based on certain fields, removes the 'continent' column, filters rows based on the 'code' column and the 'year' column.
+# It then sorts the data and rearranges the columns in a specific order. The final cleaned, merged and sorted data is then written to 'output.tsv'.
+
+
 #!/bin/bash
 
 # Check for three arguments
